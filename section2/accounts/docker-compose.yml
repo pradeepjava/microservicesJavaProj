@@ -1,0 +1,81 @@
+services:
+  rabbitmq:
+    container_name: "rabbit"
+    image: rabbitmq:management
+    hostname: rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5s
+    extends:
+      service: implementNetwork
+      file: common.yml
+
+  configserver:
+    container_name: "configserverms"
+    image: "pkumar25/configservers:s6"
+    ports:
+      - 8071:8071
+    healthcheck:
+      test: "curl --fail --silent localhost:8071/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    extends:
+      service: implementDeployment
+      file: common.yml
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  accounts:
+    container_name: "accountsms"
+    image: "pkumar25/accounts:s6"
+    ports:
+      - 8080:8080
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "accountsms"
+    extends:
+      service: implementsEnvVariable
+      file: common.yml
+
+  loans:
+    container_name: "loansms"
+    image: "pkumar25/loans:s6"
+    ports:
+      - 8090:8090
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "loansms"
+    extends:
+      service: implementsEnvVariable
+      file: common.yml
+
+  cards:
+    container_name: "cardsms"
+    image: "pkumar25/cards:s6"
+    ports:
+      - 9000:9000
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "cardsms"
+    extends:
+      service: implementsEnvVariable
+      file: common.yml
+
+networks:
+  easybank:
+    driver: "bridge"

@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: "cloudgatewayms"
+  config:
+    import: "optional:configserver:http://localhost:8071"
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+              lower-case-service-id: true
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    gateway:
+      access: unrestricted
+  info:
+    env:
+      enabled: true
+info:
+  app:
+    name: "spring cloud gateway"
+    version: "1.0.0"
+    description: "Eazybank spring cloud gateway application"
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+logging:
+  level:
+    org:
+      springframework:
+        cloud:
+          gateway: DEBUG

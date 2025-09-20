@@ -1,0 +1,158 @@
+services:
+  accountsdb:
+    container_name: "accountsdb"
+    image: mysql
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: accountsdb
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    networks:
+      - easybank
+    volumes:
+      - accountsdb_volume:/var/lib/mysql
+
+  cardsdb:
+    container_name: "cardsdb"
+    image: mysql
+    ports:
+      - 3307:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cardsdb
+    healthcheck:
+      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    networks:
+      - easybank
+    volumes:
+      - cardsdb_volume:/var/lib/mysql
+
+  loansdb:
+    container_name: "loansdb"
+    image: mysql
+    ports:
+      - 3308:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: loansdb
+    healthcheck:
+      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    networks:
+      - easybank
+    volumes:
+      - loansdb_volume:/var/lib/mysql
+  configserver:
+    container_name: "configserverms"
+    image: "pkumar25/configservers:s7"
+    ports:
+      - 8071:8071
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8071/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+
+  accounts:
+    container_name: "accountsms"
+    image: "pkumar25/accounts:s7"
+    ports:
+      - 8080:8080
+    depends_on:
+      configserver:
+        condition: service_healthy
+      accountsdb:
+        condition: service_healthy
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    environment:
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_URL: "jdbc:mysql://accountsdb:3306/accountsdb"
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "accountsms"
+
+  loans:
+    container_name: "loansms"
+    image: "pkumar25/loans:s7"
+    ports:
+      - 8090:8090
+    networks:
+      - easybank
+    depends_on:
+      configserver:
+        condition: service_healthy
+      loansdb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "loansms"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_URL: "jdbc:mysql://loansdb:3306/loansdb"
+
+  cards:
+    container_name: "cardsms"
+    image: "pkumar25/cards:s7"
+    ports:
+      - 9000:9000
+    depends_on:
+      configserver:
+        condition: service_healthy
+      cardsdb:
+        condition: service_healthy
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "cardsms"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_DATASOURCE_URL: "jdbc:mysql://cardsdb:3306/cardsdb"
+
+networks:
+  easybank:
+    driver: "bridge"
+
+volumes:
+  accountsdb_volume:
+    driver: local
+  loansdb_volume:
+    driver: local
+  cardsdb_volume:
+    driver: local
