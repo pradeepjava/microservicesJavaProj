@@ -1,0 +1,271 @@
+services:
+  keyclock:
+    image: quay.io/keycloak/keycloak:26.4.0
+    ports:
+      - "8070:8080"
+    networks:
+      - easybank
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"
+    command: "start-dev"
+    
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - easybank
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - easybank
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - easybank
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: tempo
+    command: -config.file /etc/tempo-config.yml
+    ports:
+      - "3110:3100"
+      - "4318:4318"
+    volumes:
+      - ./tempo.yml:/etc/tempo-config.yml
+    networks:
+      - easybank
+
+  grafana:
+    environment:
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_FEATURE_TOGGLES_ENABLE=alertingSimplifiedRouting,alertingQueryAndExpressionsStepMode
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        /run.sh
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    networks:
+      - easybank
+    volumes:
+      - ./datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+
+  redis:
+    container_name: "rediscontainer"
+    image: "docker.io/redis"
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      timeout: 10s
+      retries: 10
+    networks:
+      - easybank
+
+  configserver:
+    container_name: "configserverms"
+    image: "docker.io/pkumar25/configservers:s12"
+    ports:
+      - 8071:8071
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8071/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    environment:
+      OTEL_SERVICE_NAME: "configserver"
+      JAVA_TOOL_OPTIONS: "-javaagent:/app/libs/opentelemetry-javaagent-2.11.0.jar"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+
+
+  cloudgateway:
+    container_name: "cloudgatewayms"
+    image: "docker.io/pkumar25/cloudgateway:s12"
+    ports:
+      - 8072:8072
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    depends_on:
+      accounts:
+        condition: service_healthy
+      loans:
+        condition: service_healthy
+      cards:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_APPLICATION_NAME: "cloudgatewayms"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eurekaserver:8761/eureka/"
+      SPRING_DATA_REDIS_CONNECT-TIMEOUT: 2s
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_TIMEOUT: 1s
+      OTEL_SERVICE_NAME: "cloudgateway"
+      JAVA_TOOL_OPTIONS: "-javaagent:/app/libs/opentelemetry-javaagent-2.11.0.jar"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: "http://keyclock:8080/realms/master/protocol/openid-connect/certs"
+
+
+  eurekaserver:
+    container_name: "eurekaserverms"
+    image: "docker.io/pkumar25/eurakaserver:s12"
+    ports:
+      - 8761:8761
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8761/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      OTEL_SERVICE_NAME: "eurekaserver"
+      JAVA_TOOL_OPTIONS: "-javaagent:/app/libs/opentelemetry-javaagent-2.11.0.jar"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+
+  accounts:
+    container_name: "accountsms"
+    image: "docker.io/pkumar25/accounts:s12"
+#    ports:
+#      - 8080:8080
+    depends_on:
+      eurekaserver:
+        condition: service_healthy
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8080/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "accountsms"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eurekaserver:8761/eureka/"
+      OTEL_SERVICE_NAME: "accounts"
+      JAVA_TOOL_OPTIONS: "-javaagent:/app/libs/opentelemetry-javaagent-2.11.0.jar"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+
+
+  loans:
+    container_name: "loansms"
+    image: "docker.io/pkumar25/loans:s12"
+#    ports:
+#      - 8090:8090
+    networks:
+      - easybank
+    depends_on:
+      eurekaserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8090/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "loansms"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eurekaserver:8761/eureka/"
+      OTEL_SERVICE_NAME: "loans"
+      JAVA_TOOL_OPTIONS: "-javaagent:/app/libs/opentelemetry-javaagent-2.11.0.jar"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+
+
+  cards:
+    container_name: "cardsms"
+    image: "docker.io/pkumar25/cards:s12"
+#    ports:
+#      - 9000:9000
+    depends_on:
+      eurekaserver:
+        condition: service_healthy
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:9000/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "cardsms"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eurekaserver:8761/eureka/"
+      OTEL_SERVICE_NAME: "cards"
+      JAVA_TOOL_OPTIONS: "-javaagent:/app/libs/opentelemetry-javaagent-2.11.0.jar"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+
+
+networks:
+  easybank:
+    driver: "bridge"
