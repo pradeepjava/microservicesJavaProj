@@ -1,0 +1,26 @@
+services:
+  implementNetwork:
+    networks:
+      - easybank
+
+  implementDeployment:
+    extends:
+      service: implementNetwork
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    environment:
+      SPRING_RABBITMQ_HOST: "rabbitmq"
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: "guest"
+      SPRING_RABBITMQ_PASSWORD: "guest"
+
+  implementsEnvVariable:
+    extends:
+      service: implementDeployment
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+
+

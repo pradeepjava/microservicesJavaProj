@@ -1,0 +1,147 @@
+services:
+
+  configserver:
+    container_name: "configserverms"
+    image: "docker.io/pkumar25/configservers:s9"
+    ports:
+      - 8071:8071
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8071/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+
+  cloudgateway:
+    container_name: "cloudgatewayms"
+    image: "docker.io/pkumar25/cloudgateway:s9"
+    ports:
+      - 8072:8072
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    depends_on:
+      accounts:
+        condition: service_healthy
+      loans:
+        condition: service_healthy
+      cards:
+        condition: service_healthy
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_APPLICATION_NAME: "cloudgatewayms"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eurekaserver:8761/eureka/"
+
+  eurekaserver:
+    container_name: "eurekaserverms"
+    image: "docker.io/pkumar25/eurakaserver:s9"
+    ports:
+      - 8761:8761
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8761/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+
+  accounts:
+    container_name: "accountsms"
+    image: "docker.io/pkumar25/accounts:s9"
+    ports:
+      - 8080:8080
+    depends_on:
+      eurekaserver:
+        condition: service_healthy
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8080/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "accountsms"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eurekaserver:8761/eureka/"
+
+  loans:
+    container_name: "loansms"
+    image: "docker.io/pkumar25/loans:s9"
+    ports:
+      - 8090:8090
+    networks:
+      - easybank
+    depends_on:
+      eurekaserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:8090/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "loansms"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eurekaserver:8761/eureka/"
+
+  cards:
+    container_name: "cardsms"
+    image: "docker.io/pkumar25/cards:s9"
+    ports:
+      - 9000:9000
+    depends_on:
+      eurekaserver:
+        condition: service_healthy
+    networks:
+      - easybank
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    healthcheck:
+      test: "curl --fail --silent localhost:9000/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+    environment:
+      SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:8071/"
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_APPLICATION_NAME: "cardsms"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eurekaserver:8761/eureka/"
+
+networks:
+  easybank:
+    driver: "bridge"

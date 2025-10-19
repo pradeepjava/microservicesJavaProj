@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: eurakaserverms
+  config:
+    import: "optional:configserver:http://localhost:8071"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: "${spring.application.name}"
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    fetchRegistry: false
+    registerWithEureka: false
+
+logging:
+  level:
+    com:
+      eurakaserver:
+        eurakaserver: DEBUG
+  pattern:
+    level: "%5p [${spring.application.name},%X{trace_id},%X{span_id}]"
