@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: messagems
+  cloud:
+    function:
+      definition: processEmail|processSMS
+    stream:
+      bindings:
+        processEmailprocessSMS-in-0:
+          destination: send-communication
+          group: ${spring.application.name}
+        processEmailprocessSMS-out-0:
+          destination: communication-sent
+      kafka:
+        binder:
+          brokers:
+            - localhost:9092
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - refresh
+          - info
+          - metrics
+          - prometheus
+  endpoint:
+    shutdown:
+      access: unrestricted
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  info:
+    env:
+      enabled: true
+
+  metrics:
+    tags:
+      application: "${spring.application.name}"
+
+info:
+  app:
+    name: "accountsma"
+    version: "1.0.0"
+    description: "Eazybank accounts application"
+
+
+
+
+server:
+  port: 7070
+
+logging:
+  level:
+    com:
+      eazybank:
+        messagems: DEBUG
+    org.springframework.cloud.stream: DEBUG
+    org.springframework.kafka: DEBUG

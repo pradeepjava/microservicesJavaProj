@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: "cloudgatewayms"
+  config:
+    import: "optional:configserver:http://localhost:8071"
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 5s
+    kubernetes:
+      discovery:
+        enabled: true
+        all-namespaces: true
+    discovery:
+      client:
+        health-indicator:
+          enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      connect-timeout: 2s
+      timeout: 1s
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: "http://localhost:8070/realms/master/protocol/openid-connect/certs"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    gateway:
+      access: unrestricted
+  info:
+    env:
+      enabled: true
+  metrics:
+    tags:
+      application: "${spring.application.name}"
+info:
+  app:
+    name: "spring cloud gateway"
+    version: "1.0.0"
+    description: "Eazybank spring cloud gateway application"
+logging:
+  level:
+    org:
+      springframework:
+        cloud:
+          gateway: DEBUG
+  pattern:
+    level: "%5p [${spring.application.name},%X{trace_id},%X{span_id}]"
+
+resilience4j.circuitbreaker:
+  configs:
+    default:
+      slidingWindowSize: 10
+      permittedNumberOfCallsInHalfOpenState: 2
+      failureRateThreshold: 50
+      waitDurationInOpenState: 10000
+
+resilience4j:
+  timelimiter:
+    instances:
+      apiGatewayAccountsCircuitBreaker:
+        timeout-duration: 10s

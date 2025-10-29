@@ -23,6 +23,7 @@ public class Security {
         http.authorizeExchange(authorizeExchangeSpec -> authorizeExchangeSpec.pathMatchers(HttpMethod.GET).permitAll()
 
                 .pathMatchers(HttpMethod.POST,"/accountsms/**").hasAnyRole("ACCOUNTS")
+                .pathMatchers(HttpMethod.DELETE,"/accountsms/**").hasAnyRole("ACCOUNTS")
                 .pathMatchers(HttpMethod.POST,"/cardsms/**").hasAnyRole("CARDS")
                 .pathMatchers(HttpMethod.POST,"/loansms/**").hasAnyRole("LOANS"))
                 .oauth2ResourceServer(oAuth2ResourceServerSpec -> oAuth2ResourceServerSpec

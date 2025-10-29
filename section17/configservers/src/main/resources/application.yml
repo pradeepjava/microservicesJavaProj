@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: configserversms
+  profiles:
+    active: git
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/pradeepjava/microserviceconfig.git
+          default-label: master
+          timeout: 5
+          force-pull: true
+          clone-on-start: true
+
+server:
+  port: 8071
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: "${spring.application.name}"
+
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+encrypt:
+  key: "a8d3c1e9f4b6d7e2c0f9a5b8e4c3d2f7a1b0e8d6c7f5a4e3d9c2f0a7b1e6c8"
+
+logging:
+  level:
+    com:
+      configserver:
+        ms: DEBUG
+  pattern:
+    level: "%5p [${spring.application.name},%X{trace_id},%X{span_id}]"

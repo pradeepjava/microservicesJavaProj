@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eurekaserver-deployment
+  labels:
+    app: eurekaserver
+  namespace: eazybank
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eurekaserver
+  template:
+    metadata:
+      labels:
+        app: eurekaserver
+    spec:
+      containers:
+      - name: eurekaserver
+        image: pkumar25/eurakaserver:s14
+        ports:
+        - containerPort: 8761
+        env:
+        - name: SPRING_APPLICATION_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: eazybank-configmap
+              key: EUREKA_APPLICATION_NAME
+        - name: SPRING_CONFIG_IMPORT
+          valueFrom:
+            configMapKeyRef:
+              name: eazybank-configmap
+              key: SPRING_CONFIG_IMPORT
+        - name: SERVER_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: eazybank-configmap
+              key: EUREKA_PORT
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eurekaserver
+  labels:
+    app: eurekaserver
+
+spec:
+  selector:
+    app: eurekaserver
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 8761
+      targetPort: 8761
